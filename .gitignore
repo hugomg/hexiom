@@ -1,0 +1,5 @@
+*.pyc
+
+sat_in/*
+sat_out/*
+scratch/*

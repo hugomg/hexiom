@@ -32,7 +32,7 @@ My final results
 In terms of speed, I **managed to solve the case that used to take hours in took hours in just over one minute**, while also still taking just a couple of seconds for the other easy problems.
 
 In terms of programming and algorithms, the good part is precisely that **I didn't have to do anything very special**.
-Besides encoding the problem using SAT, **the underlying algorithm is still exaustive backtracking, without any Hexiom-specific heuristics added<sup>1</sup>**
+Besides encoding the problem using SAT, **the underlying algorithm is still exaustive backtracking, without any Hexiom-specific heuristics added<sup>1</sup>.**
 
 <sup>1</sup> (Well, one might try to count the symmetry-breaking as Hexiom-specific but the overall techinique is still pretty general...)
 
@@ -76,9 +76,9 @@ For example, given variables `x`, `y`, and predicates
     3) (NOT y)  OR (NOT z) 
     4) x
 
-We can produce the assignment {X=1, Y=1, Z=0} that satisfies all 4 predicates.
+We can produce the assignment {X=1, Y=1, Z=0} that satisfies all 4 clauses.
 
-However if where to add the 5-th predicate
+However if where to add the 5-th clause
 
     5) (NOT x) OR z
     
@@ -103,12 +103,12 @@ From this on its a matter of writing the predicates:
    * Cardinality constraints to define T<sub>n,k</sub>
 
 * Level-dependant predicates, to describe the specific Hexiom level:
-   * Set T<sub>n,k</sub> according to the actual arrangement of tiles.
-   * Set P<sub>m,n</sub> or O<sub>m</sub> for slots that come with preset values that cannot be changed.
+   * Set T<sub>n,k</sub> according to the actual number ot tiles available.
+   * Set P<sub>m,n</sub> and O<sub>m</sub> for slots that come with preset values that cannot be changed.
 
-The only hard bit up to here is the cardinality constraints. For the small case (only a tile per slot) I just" brute-forced" (O(n^2)) it and made a rule for each pair of variables saying at least one of them must be false.
+The only hard bit up to here is the cardinality constraints. For the small case (the rule for only a tile per slot) I " brute-forced" (O(n^2)) it and made a rule for each pair of variables saying at least one of them must be false.
 
-For the other cardinality constraints, I used an unary encoding, with helper variables such as `Nps(m, k, i) := There are at least k occupied tiles among the first i neighbors of tile m`. This gives a compact encoding, unlike the naïve version that lists all exponentialy manypossibilities.
+For the other cardinality constraints, I used an unary encoding, with helper variables such as `Nps(m, k, i) := There are at least k occupied tiles among the first i neighbors of tile m`. This gives a compact encoding, unlike the naïve version that lists all exponentialy-many possibilities.
 
 First results
 -------------
@@ -135,7 +135,7 @@ Hexagonal symmetries can be boiled down to the following 12 rotations and reflec
     2 0 5  1 0 4  6 0 3  ... and 3 more ...
      3 4    2 3    1 2
  
-The trick behind writing a symmetry breaking predicate is that if we arrange the variables corresponding to a solution in one of the permutations
+The trick behind writing a symmetry-breaking predicate is that if we arrange the variables corresponding to a solution in one of the permutations
 
     VX = O(1), P(1, 1..6), O(2), P(2, 1..6), ..., O(6), P(6, 1..6)
 
@@ -150,7 +150,7 @@ It is clear that given a satisfying assignment in VX we can find a symmetric ass
 How do I run this thing then?
 =============================
 
-    python hexiom_solver NN
+    python hexiom_solve.py NN
     
 Where NN is a number from 0 to 40 standing for the number of the level you want to solve. It will use an input file from the levels folder I copied from Slowfrog's project.
 
@@ -163,10 +163,10 @@ In any case, the hexiom solver was designed to be able to handle any SAT solver 
 
 [Page of the SAT competition with links to the solver websites](http://www.cril.univ-artois.fr/SAT11/)
 
-Some of the best preforming SAT solvers from last year if you waqnt to try them:
+Here are some of the best preforming SAT solvers from last year if you want to check them out:
 
 * [Glucose](http://www.lri.fr/~simon/?page=glucose) - [Source link](http://www.lri.fr/~simon/downloads/glucose-2-compet.tgz)
 * [Cryptominisat](http://www.msoos.org/cryptominisat2/) - [Source Link](https://gforge.inria.fr/frs/download.php/30138/cryptominisat-2.9.2.tar.gz)
 * [Lingeling](http://fmv.jku.at/lingeling/) - [Source Link](http://fmv.jku.at/lingeling/lingeling-587f-4882048-110513.tar.gz)
 
-As far as compiling goes, the solvers I linked to are all written in C or C++ and all of them come with easy to use makefiles or build scripts.
+As far as compiling goes, all the solvers I linked to are written in C or C++ and all of them come with an easy to use makefile or build script.
