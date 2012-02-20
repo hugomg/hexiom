@@ -1,43 +1,50 @@
-Solving the Hexiom Puzzle with industrial-strength SAT Solvers
-==============================================================
+Using an industrial-strength SAT solver to solve the Hexiom puzzle
+==================================================================
 
-Hexiom is one of those little Flash puzzle games. (You can play it [here](Flash http://www.kongregate.com/games/Moonkey/hexiom)).
+Recently there was some talk on Reddit
+([here](http://www.reddit.com/r/programming/comments/p54v2/solving_hexiom_perhaps_you_can_help/) and
+[here](http://www.reddit.com/r/programming/comments/pjx99/solving_hexiom_using_constraints/)) about using custom algorithms to play
+[Hexiom](http://www.kongregate.com/games/Moonkey/hexiom), a cute little Flash puzzle game from Kongregate.
 
-There has recently been some talk on Reddit ([here](http://www.reddit.com/r/programming/comments/p54v2/solving_hexiom_perhaps_you_can_help/) and [here](http://www.reddit.com/r/programming/comments/pjx99/solving_hexiom_using_constraints/)) on using a computer algorithm to solve the game (see slowfrog's [github repo](https://github.com/slowfrog/hexiom)).
+The original submitter has published some solutions using traditional backtracking and exaustive search on [his repository](https://github.com/slowfrog/hexiom), but I wandered
+if I could do better then him by leveraging a Boolean Satisfability solver. In particular, one of the problem sets (level 38) would take hours to complete and I wanted to see if I could do better then that.
 
-Slowfrog used traditional backtracking and brute force tachniques to solve the puzzle and got good results, except on the level 38, where the solver supposedly only found a solution after 2 hours of work (more on this bit latter...).
+Why bother with a SAT solver?
+-----------------------------
 
-So why SAT solvers?
--------------------
+Why should I complicate things with a SAT solver instead of tinkering with an existing backtracking solution? My motivations are basically that
 
-Backtracking and exaustive search are simple algorithms that anyone can pull off without too much trouble. Why would I want to complicate things with a SAT solver?
-
-* Modern SAT solvers have very optimized and smart brute forcing engines. The tricks they use are much more advanced then regular backtracking
+* Modern SAT solvers have very optimized and smart brute forcing engines. They can do many tricks that most people do not know about or do not go through the trouble of implementing most of the time:
    * Non chronological backtracking (can go back multiple levels at once)
-   * Efficient data structures (backtracking is O(1))
+   * Efficient data structures / watched literals (backtracking is O(1))
    * Clause learning (avoids searching the same space multiple times)
    * Random and aggressive restarts (avoids staying too long in a dead end)
+   * ...and much more!
 
-* SAT solvers let me describe the problem declaratively (kind of like Prolog, but super efficient instead).
+* SAT solver problem input is declarative so it is easy to add new rules and solving strategies without needing to rewrite the tricky backtracking innards.
+   * This will be particularly important when we get to the symmetry-breaking optimizations.
 
-* It is also possible to add optimizations via extra predicates without having to rewrite or overhaul the complicated inner backtracking algorithm. (This was very important for the important symmetry-breaking optimizations)
+Or in other words, SAT solvers are very fast and let me easily do things I would usually not try to do using a more traditional approach.
 
 My final results
 ----------------
 
-I managed to also solve most of the levels in just a couple of seconds but I **also managed to solve the case that took hours in just over one minute!**. The best part is that all of this was still just doing a smart brute force search - I did not have to use or invent any Hexiom-specific algorithms or techniques.*
+In terms of speed, I **managed to solve the case that used to take hours in took hours in just over one minute**, while also still taking just a couple of seconds for the other easy problems.
 
-*(Well, I had to think a bit for the symmetry part latter on but even this is kind of a standard technique...)
+In terms of programming and algorithms, the good part is precisely that **I didn't have to do anything very special**.
+Besides encoding the problem using SAT, **the underlying algorithm is still exaustive backtracking, without any Hexiom-specific heuristics added<sup>1</sup>**
+
+<sup>1</sup> (Well, one might try to count the symmetry-breaking as Hexiom-specific but the overall techinique is still pretty general...)
 
 -----------------------------
 
-The longer explanation
-=========
+How this all works
+==================
 
-The game
---------
+The puzzle
+----------
 
-A Hexiom puzzle instance consists of an hexagonal playing field and a set of numbered (hexagonal) tiles. The objective consists in placing the tiles in the board in such a way that the number on each tile corresponds to the amount of other neighboring tiles it has.
+A Hexiom puzzle instance consists of an hexagonal playing field and a set of numbered, hexagonal, tiles. The objective consists in placing the tiles in slots on the board in such a way that the number on each tile corresponds to the amount of neighboring tiles it has.
 
 For example, level 8 presents the following initial placement of tiles (the dots represent empty board slots):
 
@@ -57,10 +64,28 @@ And has the following solution
 
 Note how each **1** is surrounded by one other number, how each **4** is surrounded by four other numbers and how the **6** has a full set of 6 neighboring tiles around it.
 
-Modeling Hexiom using as boolean satisfiability problem.
------------
+The Boolean Satisfiability Problem
+----------------------------------
 
-SAT solvers receive inputs encoded as a [boolean satisfiability](https://en.wikipedia.org/wiki/Boolean_satisfiability_problem) problem that consists of a set of boolean variables (that can be true or false) and a list of propositional formulas<sup>1</sup> (predicates) that these variables should obey. The SAT solver will then search for an assignment of variables that satisfies all the given restrictions.
+SAT solvers, as the name indicates, solve the [boolean satisfiability](https://en.wikipedia.org/wiki/Boolean_satisfiability_problem) problem. This problem consists of determining, given a set of boolean variables and a set of propositional predicates over these variables, whether there is a true-false assignment of the variables that satisfies all the predicates.
+
+For example, given variables `x`, `y`, and predicates
+
+    1) (NOT x) OR y
+    2) y OR z
+    3) (NOT y)  OR (NOT z) 
+    4) x
+
+We can produce the assignment {X=1, Y=1, Z=0} that satisfies all 4 predicates.
+
+However if where to add the 5-th predicate
+
+    5) (NOT x) OR z
+    
+then there would be no solutions.
+
+Modeling Hexiom using as a SAT instance.
+----------------------------------------
 
 I used the following variable encodings to model the problem domain:
 
@@ -70,30 +95,30 @@ I used the following variable encodings to model the problem domain:
 * T<sub>n,k</sub> := There are k n-valued tiles placed on the board.
 * ... and other helper variables for the cardinality constraints, etc.
 
-From this on its a matter of writing predicates:
+From this on its a matter of writing the predicates:
 
-* General predicates (that give the variables the meaning we intend them to):
+* General predicates to define the variables as we intend them to be. They are mostly shared by all Hexiom instances of the same hegagon side length:
    * A cardinality constraint to say that a board slot is either empty or has a single slot on it
    * Cardinality constraints to define N<sub>m,k</sub>
    * Cardinality constraints to define T<sub>n,k</sub>
 
-* Level-dependant predicates (that describe the input):
+* Level-dependant predicates, to describe the specific Hexiom level:
    * Set T<sub>n,k</sub> according to the actual arrangement of tiles.
    * Set P<sub>m,n</sub> or O<sub>m</sub> for slots that come with preset values that cannot be changed.
 
 The only hard bit up to here is the cardinality constraints. For the small case (only a tile per slot) I just" brute-forced" (O(n^2)) it and made a rule for each pair of variables saying at least one of them must be false.
 
-For the other cardinality constraints, I used a unary encoding, with helper variables such as `Nps(m, k, i) := There are at least k occupied tiles among the first i neighbors of tile m`. This gives a quadratic encoding of the sum instead of doing the naive approach of listing all the possibilities.
+For the other cardinality constraints, I used an unary encoding, with helper variables such as `Nps(m, k, i) := There are at least k occupied tiles among the first i neighbors of tile m`. This gives a compact encoding, unlike the naïve version that lists all exponentialy manypossibilities.
 
 First results
 -------------
 
-With the initial description of the problem I already was already able to achieve results similar to those from the manually written backtracking search: all levels could be solved in under a couple of seconds, except for level 38, that took some 27 minutes to finish.
+With the initial description of the problem I already was already able to achieve results similar to those from the manually written backtracking search: all levels could be solved in under a couple of seconds, except for level 38, which took around half an hour to solve.
 
-Breaking symmetry
------------------
+Breaking symmetries
+-------------------
 
-The problem that took the longest to solve was highly symmetrical so I suspected that the solver (and the backtracking-based approach) were wasting many cycles trying the same thing multiple times (but in mirrored ways). I added *symmetry-breaking predicates* to rule out equivalent solutions from the search space.
+The Hexiom instance that took the longest to solve was highly symmetrical so I suspected that the solver (and the backtracking-based approach) were wasting many cycles trying the same things multiple times (but in mirrored ways). I added *symmetry-breaking predicates* to rule out equivalent solutions from the search space.
 
 Hexagonal symmetries can be boiled down to the following 12 rotations and reflections (the 12 comes from 6 possible rotations times 2 for either doing a reflection or not):
 
@@ -120,10 +145,6 @@ And the corresponding variables after a symmetric transformation (say a clockwis
 
 It is clear that given a satisfying assignment in VX we can find a symmetric assignment via VY. By imposing an arbitrary total order on these assignments we can force it so that only one of them is allowed (saving the SAT solver from exploring its reflections multiple times). The standard way to do this is to think of VX and VY as bit vectors representing integers and then write predicates that state the equivalent of `VX <= VY`.
 
--------
-
-1 - Actually, most SAT solvers demand that the input predicates be in clausal normal form. That is, each predicate is the OR of a list of literals and each literal is either a variable or its negation. Having the input in CNF form is not a big restriction (there are straightforward ways to efficiently convert things into it) but allows for very efficient algorithms and data structures to be used under the hood.
-
 ----------------------
 
 How do I run this thing then?
@@ -136,15 +157,16 @@ Where NN is a number from 0 to 40 standing for the number of the level you want 
 Where do I get a SAT solver?
 =============================
 
-A good place to get hot SAT solvers is the website of the annual [SAT Competition](http://satcompetition.org/).
+I am including copies of some SAT solver executables in this repo but I am not sure they will work on other computers and platforms.
+
+In any case, the hexiom solver was designed to be able to handle any SAT solver that uses the relatively standard DIMACS input and output formats.  You can find a good selection of state of the art solvers in the websites of the annual [SAT Competition](http://satcompetition.org/).
 
 [Page of the SAT competition with links to the solver websites](http://www.cril.univ-artois.fr/SAT11/)
 
-Some of the best preforming SAT solvers from last year:
+Some of the best preforming SAT solvers from last year if you waqnt to try them:
 
 * [Glucose](http://www.lri.fr/~simon/?page=glucose) - [Source link](http://www.lri.fr/~simon/downloads/glucose-2-compet.tgz)
 * [Cryptominisat](http://www.msoos.org/cryptominisat2/) - [Source Link](https://gforge.inria.fr/frs/download.php/30138/cryptominisat-2.9.2.tar.gz)
 * [Lingeling](http://fmv.jku.at/lingeling/) - [Source Link](http://fmv.jku.at/lingeling/lingeling-587f-4882048-110513.tar.gz)
 
-Most of them use similar, standardized, input and output formats and it is easy to switch them around (see the `hexiom_config.py` file). 
-As far as compiling goes, the solvers I linked to are all written in C or C++ and come with easy to use makefiles or build scripts. (I didn't try to package a working executable here already because I often fail terribly at making them be cross platform...)
+As far as compiling goes, the solvers I linked to are all written in C or C++ and all of them come with easy to use makefiles or build scripts.
